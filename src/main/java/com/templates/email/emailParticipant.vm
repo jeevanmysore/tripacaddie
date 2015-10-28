@@ -1,0 +1,10 @@
+
+<p>${message}</p>
+
+--
+<p>This message was sent by ${user.firstName} ${user.lastName}, the Trip Leader of ${trip.tripName} at <a href="#">Tripcaddie.com</a>. To visit this Trip, click here to <a href="${path}">View Trip</a>.</p>
+
+<p>Tee it up!</p>
+<p>TripCaddie Team</p>
+
+<p>DO NOT REPLY TO THIS EMAIL: This email notification was generated automatically from Tripcaddie.com.</p>

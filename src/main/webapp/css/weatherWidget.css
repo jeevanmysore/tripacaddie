@@ -1,0 +1,97 @@
+.h
+{
+	background:url('/tripcaddie/images/widgets_bg.png') ;
+	height: 180px;
+	width: 280px;
+}
+.first
+{
+	display: inline-block;
+}
+.inside
+{
+/*
+	border-style:solid;
+	border-width:1px;
+	border-color:blue;*/
+	height: 47px;
+	width: 47px;
+	margin-top: 9px;
+	margin-left:4px;
+	float: left;
+}
+.inside1
+{
+	height: 34px;
+	width:171px;
+	margin-top: 20px;
+	float: left;
+	Font-Family: Arial;
+	Font-size: 13pt;
+	Color: white;
+	text-align: center;
+}
+.inside2
+{
+	height: 30px;
+	width: 50px;
+	margin-top: 22px;
+	float: left;
+	Font-Family : Arial;
+	Font-size : 26pt;
+	Color  : yellow;
+	Font-weight : Regular;
+}
+.lower
+{
+	height: 24px;
+	width: 275px;
+}
+.ldata
+{
+	height: 18px;
+	width: 45px;
+	margin-top: 6px;
+	float: left;
+	Font-Family: Arial;
+	Font-size: 10pt;
+	Color: white;
+	text-align: center;
+	Font-weight : Regular;
+}
+.ldata12
+{
+	height: 18px;
+	width: 45px;
+	margin-top: 6px;
+	float: left;
+	Font-Family: Arial;
+	Font-size: 10pt;
+	Color: white;
+	Font-weight: Regular;
+	text-align: center;
+}
+.ldata3
+{
+	height: 27px;
+	width:45px;
+	float: left;
+	Font-Family: Arial;
+	Font-size: 10pt;
+	Color: white;
+	Font-weight : Regular;
+	vertical-align: middle;
+}
+.lower1
+{
+	height:27px;
+	width: 275px;
+	margin-top:8px;
+}
+.lower2
+{
+	height:21px;
+	width: 275px;
+	margin-top:6px;
+}
+}

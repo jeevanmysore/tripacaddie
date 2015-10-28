@@ -1,0 +1,5 @@
+
+Hi ${username},
+
+ Thanks for choosing tripcaddie to organize golf trips. Here the link
+ ${path}/confirmation.do?ID=${id}.     

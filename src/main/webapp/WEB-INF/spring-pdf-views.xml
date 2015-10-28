@@ -1,0 +1,20 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans 
+	http://www.springframework.org/schema/beans/spring-beans-2.5.xsd">
+ 
+	 <bean id="pdfViewer"
+	   	class="com.tripcaddie.frontend.itinerary.util.PdfViewer">
+	</bean>
+	
+	<bean id="pdfDownload"
+	   	class="com.tripcaddie.frontend.itinerary.util.Pdfdownload">
+	</bean>
+	
+	<bean id="teeTimePdfViewer" class="com.tripcaddie.frontend.itinerary.util.teeTimePdfViewer">
+	</bean>
+	
+	<bean id="teeTimePdfDownload" class="com.tripcaddie.frontend.itinerary.util.teeTimePdfDownload">
+	</bean>
+	
+</beans>

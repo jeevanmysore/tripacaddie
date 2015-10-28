@@ -1,0 +1,1111 @@
+package com.tripcaddie.frontend.galleries.controller;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.annotation.Resource;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.codec.binary.Base64;
+import org.apache.log4j.Logger;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.SessionAttributes;
+import org.springframework.web.multipart.MultipartFile;
+import com.tripcaddie.backend.galleries.model.PictureFile;
+import com.tripcaddie.backend.galleries.model.VideoFile;
+import com.tripcaddie.backend.trip.model.TripMember;
+import com.tripcaddie.common.image.ImagePath;
+import com.tripcaddie.common.model.FileUploadForm;
+import com.tripcaddie.frontend.galleries.dto.PictureCommentDto;
+import com.tripcaddie.frontend.galleries.dto.PictureFileDto;
+import com.tripcaddie.frontend.galleries.dto.VideoCommentDto;
+import com.tripcaddie.frontend.galleries.dto.VideoFileDto;
+import com.tripcaddie.frontend.galleries.dto.uploadVideoForm;
+import com.tripcaddie.frontend.galleries.service.GalleriesService;
+import com.tripcaddie.frontend.galleries.util.ConvertAnyVideoToFlv;
+import com.tripcaddie.frontend.galleries.util.GenerateThumbnailFromVideo;
+import com.tripcaddie.frontend.trip.dto.TripDto;
+import com.tripcaddie.frontend.trip.service.TripService;
+
+@Controller
+@RequestMapping("/trip/*")
+@SessionAttributes("trip")
+public class GalleriesController {
+
+	private static Logger logger = Logger.getLogger(GalleriesController.class);
+
+	@Resource(name = "galleriesService")
+	private GalleriesService galleriesService;
+	@Resource(name = "tripService")
+	private TripService tripService;
+	@Resource(name = "imagePath")
+	private ImagePath imagePath;
+
+	// Get All Pictures
+	@RequestMapping(value = "getPictures.do", method = RequestMethod.GET)
+	public String getPictureFilesByDate(
+			@RequestParam(value = "tripId") int tripId, Model model) {
+		String imageUrl;
+		System.out.println("In gallery controller");
+		try {
+			ArrayList<PictureFileDto> pictureFileDtos = galleriesService
+					.getPicturesByDate(tripId);
+			TripDto tripDto = tripService.getTrip(tripId);
+
+			String imageBase64 = null;
+
+			for (PictureFileDto pictureFileDto : pictureFileDtos) {
+				imageUrl = imagePath.getTripimagepath()
+						+ pictureFileDto.getPictureName();
+				imageBase64 = this.getImageEncodedString(imageUrl);
+				pictureFileDto.setImageInBase64(imageBase64);
+				pictureFileDto.setNoOfComments(galleriesService
+						.getNoOfcomments(pictureFileDto.getPictureId()));
+			}
+			if (tripDto.getImagePath() != null) {
+				imageBase64 = this
+						.getImageEncodedString(imagePath.getTripimagepathperuser()+tripDto.getImagePath());
+			}
+			model.addAttribute("image", imageBase64);
+			model.addAttribute("pictures", pictureFileDtos);
+			model.addAttribute("trip", tripDto);
+
+			return "trip/photos";
+		} catch (Exception e) {
+			e.printStackTrace();
+			logger.info(e.getMessage() + " " + e);
+			return "error";
+		}
+
+	}
+
+	// Get particular Picture
+	@RequestMapping(value = "getPicture.do", method = RequestMethod.GET)
+	public String getPicture(@RequestParam(value = "tripId") int tripId,
+			@RequestParam(value = "pictureId") int pictureId, Model model) {
+		String imageUrl;
+		System.out.println("In gallery controller");
+		try {
+			TripDto tripDto = tripService.getTrip(tripId);
+			PictureFileDto pictureFileDto = galleriesService.getPicture(
+					pictureId, tripId);
+
+			String imageBase64 = null;
+
+			imageUrl = imagePath.getTripimagepath()
+					+ pictureFileDto.getPictureName();
+			imageBase64 = this.getImageEncodedString(imageUrl);
+			pictureFileDto.setImageInBase64(imageBase64);
+			pictureFileDto.setNoOfComments(galleriesService
+					.getNoOfcomments(pictureFileDto.getPictureId()));
+
+			if (tripDto.getImagePath() != null) {
+				imageBase64 = this
+						.getImageEncodedString(imagePath.getTripimagepathperuser()+tripDto.getImagePath());
+			}
+
+			System.out.println("--------Getting Picture comments--------");
+			// Picture Comments
+			ArrayList<PictureCommentDto> pictureCommentDtos = galleriesService
+					.getPictureComments(pictureId);
+			for (PictureCommentDto pictureCommentDto : pictureCommentDtos) {
+				if (pictureCommentDto.getTripMemberDto().getTripCaddieUserDto()
+						.getImageUrl() != null
+						&& !pictureCommentDto.getTripMemberDto()
+								.getTripCaddieUserDto().getImageUrl().isEmpty())
+					pictureCommentDto
+							.getTripMemberDto()
+							.getTripCaddieUserDto()
+							.setImageBase64(
+									getImageEncodedString(imagePath
+											.getTripimagepathperuser()
+											+ pictureCommentDto
+													.getTripMemberDto()
+													.getTripCaddieUserDto()
+													.getImageUrl()));
+			}
+
+			model.addAttribute("image", imageBase64);
+			model.addAttribute("picture", pictureFileDto);
+			model.addAttribute("trip", tripDto);
+			model.addAttribute("pictureComment", pictureCommentDtos);
+
+			return "trip/photo";
+		} catch (Exception e) {
+			e.printStackTrace();
+			logger.info(e.getMessage() + " " + e);
+			return "error";
+		}
+	}
+
+	// Display Add photo
+	@RequestMapping(value = "addPhoto.do", method = RequestMethod.GET)
+	public String displayAddPicturePage(
+			@RequestParam(value = "tripId") int tripId, Model model) {
+		try {
+			TripDto tripDto = tripService.getTrip(tripId);
+
+			
+			if (tripDto.getImagePath() != null) {
+				tripDto.setImagebase64( this
+						.getImageEncodedString(imagePath.getTripimagepathperuser()+tripDto.getImagePath()));
+			}
+			model.addAttribute("trip", tripDto);
+			
+
+			return "trip/addPhoto";
+		} catch (Exception e) {
+			e.printStackTrace();
+			logger.info(e.getMessage() + " " + e.getCause());
+			return "error";
+		}
+	}
+
+	// Add a photo
+	@RequestMapping(value = "addPhotos.do", method = RequestMethod.POST)
+	public String addPicture(
+			@ModelAttribute("uploadForm") FileUploadForm uploadForm,BindingResult result,
+			HttpServletResponse response) {
+		String filename = null;
+		boolean fileformat=false;
+		String path = null;
+		try {
+
+			
+
+			if(uploadForm.getFiles().isEmpty()){
+				
+				result.addError(new FieldError("uploadForm", "files", "File Not Uploaded"));
+				return "trip/addPhoto";
+			}else{
+				List<MultipartFile> files=uploadForm.getFiles();
+				for(MultipartFile file:files){
+				 long MEGABYTE = 1024L * 1024L;
+				long filesizeinMB=file.getSize()/MEGABYTE;
+				System.out.println("filesizeinMB"+filesizeinMB);
+				if(filesizeinMB>3){
+					result.addError(new FieldError("uploadForm", "files", "File Size is greater than 3MB"));
+					return "trip/addPhoto";
+				}
+				String name=file.getOriginalFilename();
+				name=name.substring(name.lastIndexOf(".")+1, name.length());
+				if(name.equalsIgnoreCase("png") || name.equalsIgnoreCase("gif")||name.equalsIgnoreCase("jpeg")||name.equalsIgnoreCase("jpg") ){
+					fileformat=true;
+				}
+				
+				if(!fileformat){
+					result.addError(new FieldError("uploadForm", "files", " png  gif jpeg jpg Formats are supported !"));
+					return "trip/addPhoto";
+				}
+				}
+				
+			}
+			
+			
+			
+			
+			List<MultipartFile> files = uploadForm.getFiles();
+			if (files.size() > 0 && files != null) {
+				for (MultipartFile multipartFile : files) {
+					filename = multipartFile.getOriginalFilename();
+					int maxId = galleriesService.getMaxPictureId() + 1;
+					filename = filename.substring(0, filename.indexOf("."))
+							+ "_"
+							+ maxId
+							+ filename.substring(filename.indexOf("."),
+									filename.length());
+
+					path = imagePath.getTripimagepath() + filename;
+					File file = new File(path);
+					FileOutputStream fileOutputStream = new FileOutputStream(
+							file);
+					byte[] image = multipartFile.getBytes();
+					fileOutputStream.write(image);
+
+					galleriesService.addPicture(uploadForm.getTripId(),
+							filename, uploadForm.getDescription());
+
+				}
+			}
+			response.sendRedirect("/tripcaddie/trip/getPictures.do?tripId="
+					+ uploadForm.getTripId());
+		} catch (Exception e) {
+			e.printStackTrace();
+			logger.info(e.getMessage() + " " + e.getCause());
+			try {
+				response.sendRedirect("/error.do");
+			} catch (IOException e1) {
+				e1.printStackTrace();
+				logger.info(e.getMessage() + " " + e.getCause());
+			}
+		}
+		return null;
+
+	}
+	//delete a photo
+		@RequestMapping(value="deletePicture.do",method=RequestMethod.POST)
+		public	@ResponseBody
+		String deletePhoto(@RequestParam(value="pictureId") int pictureID,
+				@RequestParam(value="tripId") int tripId) {
+			try {
+				galleriesService.deletePicture(pictureID, tripId);
+				return "success";
+			} catch (Exception e) {
+				e.printStackTrace();
+				logger.info(e.getMessage()+" "+e.getCause());
+				return "error";
+			}
+		}
+		
+		//Display edit a photo
+		@RequestMapping(value="editPicture.do",method=RequestMethod.GET)
+		public String displayEditPhoto(@RequestParam(value="pictureId") int pictureId,
+				@RequestParam(value="tripId") int tripId,
+				Model model) {
+			try {
+				System.out.println("ID in edit:"+pictureId);
+				
+				TripDto tripDto=tripService.getTrip(tripId);
+				PictureFileDto pictureFileDto=galleriesService.getPicture(pictureId, tripId);
+				String imageBase64=null;
+				
+				if(tripDto.getImagePath()!=null){
+					imageBase64=this.getImageEncodedString(imagePath.getTripimagepathperuser()+tripDto.getImagePath());
+				}
+				model.addAttribute("image", imageBase64);
+				
+				String imageUrl = imagePath.getTripimagepath()+pictureFileDto.getPictureName();
+				imageBase64=this.getImageEncodedString(imageUrl);
+				
+				pictureFileDto.setImageInBase64(imageBase64);
+				model.addAttribute("trip", tripDto);
+				model.addAttribute("picture", pictureFileDto);
+				
+				return "trip/editPhoto";
+			} catch (Exception e) {
+				e.printStackTrace();
+				logger.info(e.getMessage()+" "+e.getCause());
+				return "error";
+			}
+		}
+
+		//edit a photo
+		@RequestMapping(value="editPicture.do",method=RequestMethod.POST)
+		public @ResponseBody
+		String editPhoto(@RequestParam(value="tripId") int tripId,
+				@RequestParam(value="pictureId") int pictureId,
+				@RequestParam(value="description") String description) {
+			try {
+				galleriesService.editPicture(pictureId, tripId, description);
+				return "success";
+			} catch (Exception e) {
+				e.printStackTrace();
+				logger.info(e.getMessage()+" "+e.getCause());
+				return "error";
+			}
+		}
+		
+		/////For comments
+		@RequestMapping(value="addComment.do")
+		public @ResponseBody
+		String addComment(@RequestParam(value="pictureId") int pictureId,
+				@RequestParam(value="comment") String comment) {
+			try {
+				galleriesService.addComment(pictureId, comment);
+				return "success";
+			} catch (Exception e) {
+				e.printStackTrace();
+				logger.info(e.getMessage()+" "+e.getCause());
+				return "error";
+			}
+		}
+		
+		@RequestMapping(value="deleteComment.do",method=RequestMethod.POST)
+		public @ResponseBody
+		String deleteComment(@RequestParam(value="commentId") int commentID) {
+			try {
+				
+				galleriesService.deleteComment(commentID);
+				return "success";
+				
+			} catch (Exception e) {
+				e.printStackTrace();
+				logger.info(e.getMessage()+" "+e.getCause());
+				return "error";
+			}
+		}
+		
+		@RequestMapping(value="editComment.do",method=RequestMethod.POST)
+		public @ResponseBody
+		String editComment(@RequestParam(value="commentId") int commentID,
+				@RequestParam(value="comment") String comment) {
+			try {
+				galleriesService.editPictureComment(commentID, comment);
+				//galleriesService.deleteComment(commentID);
+				return "success";
+				
+			} catch (Exception e) {
+				e.printStackTrace();
+				logger.info(e.getMessage()+" "+e.getCause());
+				return "error";
+			}
+		}
+
+		
+		private String getImageEncodedString(String imagePath) throws Exception{
+			
+			File file=new File(imagePath);
+			byte[] b=new byte[(int) file.length()];
+			FileInputStream fileInputStream=new FileInputStream(file);
+			fileInputStream.read(b);
+			return Base64.encodeBase64String(b);
+		}
+		
+		@RequestMapping(value="AddFavPicture.do",method=RequestMethod.POST)
+		public @ResponseBody
+		String AddPicturetoFav(@RequestParam(value="pictureId") int pictureId	,@RequestParam("tripId") int tripId) {
+			try {
+				PictureFile pictureFile=galleriesService.getPictureFile(pictureId, tripId);
+				TripMember member=pictureFile.getTripMember();
+				List<TripMember> members=new ArrayList<TripMember>(pictureFile.getFavouritePicture());
+				members.add(member);
+				pictureFile.setFavouritePicture(members);
+				//update entity
+				galleriesService.updateEntity(pictureFile);
+				//galleriesService.deleteComment(commentID);
+				return "success";
+				
+			} catch (Exception e) {
+				e.printStackTrace();
+				logger.info(e.getMessage()+" "+e.getCause());
+				return "error";
+			}
+		}
+		
+		@RequestMapping(value="RemoveFavPicture.do",method=RequestMethod.POST)
+		public @ResponseBody
+		String RemovePictureFromFav(@RequestParam(value="pictureId") int pictureId	,@RequestParam("tripId") int tripId) {
+			try {
+				PictureFile pictureFile=galleriesService.getPictureFile(pictureId, tripId);
+				TripMember member=pictureFile.getTripMember();
+				List<TripMember> members=new ArrayList<TripMember>(pictureFile.getFavouritePicture());
+				members.remove(member);
+				pictureFile.setFavouritePicture(members);
+				//update entity
+				galleriesService.updateEntity(pictureFile);
+				//galleriesService.deleteComment(commentID);
+				return "success";
+				
+			} catch (Exception e) {
+				e.printStackTrace();
+				logger.info(e.getMessage()+" "+e.getCause());
+				return "error";
+			}
+		
+		}
+		
+		
+		/**
+		 * Add star rating
+		 * @param tripId
+		 * @param model
+		 * @return
+		 */
+		@RequestMapping(value = "addPicRating.do", method = RequestMethod.POST)
+		public  @ResponseBody String ratingPicture(@RequestParam(value = "tripId") int tripId,@RequestParam(value = "rating") int rating,
+				@RequestParam(value = "pictureId") int pictureId, Model model) {
+			try {
+				galleriesService.updateorAddPicRating( tripId ,pictureId , rating);
+			} catch (Exception e) {
+				logger.error(e);
+			}
+			return "ok";
+		}
+
+		/**
+		 * Sorting order
+		 * @param tripId
+		 * @param model
+		 * @return
+		 */
+		@RequestMapping(value = "picturesbysortorder.do", method = RequestMethod.GET)
+		public String picturesbysortorder(
+				@RequestParam(value = "tripId") int tripId,@RequestParam(value="sortorder") String sortorder, Model model) {
+			String imageUrl;
+		
+			try {
+				ArrayList<PictureFileDto> pictureFileDtos =null;
+				if(sortorder.equalsIgnoreCase("date")){
+				 pictureFileDtos = galleriesService
+						.getPicturesByDate(tripId);
+				}
+				else if(sortorder.equalsIgnoreCase("rating")){
+					 pictureFileDtos = galleriesService
+								.getPicturesByRating(tripId);
+				}
+				else if(sortorder.equalsIgnoreCase("favourites")){
+					 pictureFileDtos = galleriesService
+								.getPicturesByFav(tripId);
+				}
+				TripDto tripDto = tripService.getTrip(tripId);
+
+				String imageBase64 = null;
+
+				for (PictureFileDto pictureFileDto : pictureFileDtos) {
+					imageUrl = imagePath.getTripimagepath()
+							+ pictureFileDto.getPictureName();
+					imageBase64 = this.getImageEncodedString(imageUrl);
+					pictureFileDto.setImageInBase64(imageBase64);
+					pictureFileDto.setNoOfComments(galleriesService
+							.getNoOfcomments(pictureFileDto.getPictureId()));
+				}
+				if (tripDto.getImagePath() != null) {
+					imageBase64 = this
+							.getImageEncodedString(imagePath.getTripimagepathperuser()+tripDto.getImagePath());
+				}
+				model.addAttribute("image", imageBase64);
+				model.addAttribute("pictures", pictureFileDtos);
+				model.addAttribute("trip", tripDto);
+
+				return "trip/photos";
+			} catch (Exception e) {
+				e.printStackTrace();
+				logger.info(e.getMessage() + " " + e);
+				return "error";
+			}
+
+		}
+		
+		
+		//All pictures
+		
+		@RequestMapping(value = "allPictures.do", method = RequestMethod.GET)
+		public String gatAllPicture(Model model) {
+			try {
+
+				List<TripDto> trips = tripService.getTripsOfUser();
+
+				for (TripDto trip : trips) {
+					trip.setGalleriespresent(false);
+					// get Imageasbase64
+					if (trip.getImagePath() != null) {
+
+						trip.setImagebase64(getImageEncodedString(imagePath.getTripimagepathperuser()+trip
+								.getImagePath()));
+					}
+					List<PictureFileDto> pictures = new ArrayList<PictureFileDto>();
+					List<PictureFileDto> pList = galleriesService
+							.getPicturesByDate(trip.getTripId());
+
+					for (PictureFileDto pictureFileDto : pList) {
+						
+	                        String imageUrl = imagePath.getTripimagepath()
+									+ pictureFileDto.getPictureName();
+							pictureFileDto
+									.setImageInBase64(getImageEncodedString(imageUrl));
+							pictureFileDto
+									.setNoOfComments(galleriesService
+											.getNoOfcomments(pictureFileDto
+													.getPictureId()));
+							
+							pictures.add(pictureFileDto);
+
+						
+					}
+					
+					if(pictures!=null && !pictures.isEmpty()){
+						trip.setGalleriespresent(true);
+						trip.setPictures(pictures);
+					}
+
+				}
+
+				
+				model.addAttribute("trips", trips);
+
+				return "allphotos";
+			} catch (Exception e) {
+				e.printStackTrace();
+				logger.info(e.getMessage() + " " + e);
+				return "error";
+			}
+
+		}
+		
+		
+		/**
+		 * Sort order all pictures
+		 * @param tripId
+		 * @param model
+		 * @return
+		 */
+		
+		
+		@RequestMapping(value = "AllpicturesbySort.do", method = RequestMethod.GET)
+		public String AllpicturesbySort(Model model,@RequestParam(value="sortorder") String sortorder) {
+			try {
+
+				List<TripDto> trips = tripService.getTripsOfUser();
+
+				for (TripDto trip : trips) {
+					trip.setGalleriespresent(false);
+					// get Imageasbase64
+					if (trip.getImagePath() != null) {
+
+						trip.setImagebase64(getImageEncodedString(imagePath.getTripimagepathperuser()+trip
+								.getImagePath()));
+					}
+					List<PictureFileDto> pictures = new ArrayList<PictureFileDto>();
+					List<PictureFileDto> pList =null;
+					if(sortorder.equalsIgnoreCase("date")){
+						pList = galleriesService
+								.getPicturesByDate(trip.getTripId());
+						}
+						else if(sortorder.equalsIgnoreCase("rating")){
+							pList = galleriesService
+										.getPicturesByRating(trip.getTripId());
+						}
+						else if(sortorder.equalsIgnoreCase("favourites")){
+							pList = galleriesService
+										.getPicturesByFav(trip.getTripId());
+						}
+							galleriesService
+							.getPicturesByDate(trip.getTripId());
+
+					for (PictureFileDto pictureFileDto : pList) {
+						
+	                        String imageUrl = imagePath.getTripimagepath()
+									+ pictureFileDto.getPictureName();
+							pictureFileDto
+									.setImageInBase64(getImageEncodedString(imageUrl));
+							pictureFileDto
+									.setNoOfComments(galleriesService
+											.getNoOfcomments(pictureFileDto
+													.getPictureId()));
+							
+							pictures.add(pictureFileDto);
+
+						
+					}
+					
+					if(pictures!=null && !pictures.isEmpty()){
+						trip.setGalleriespresent(true);
+						trip.setPictures(pictures);
+					}
+
+				}
+
+				
+				model.addAttribute("trips", trips);
+
+				return "allphotos";
+			} catch (Exception e) {
+				e.printStackTrace();
+				logger.info(e.getMessage() + " " + e);
+				return "error";
+			}
+
+		}
+		
+		
+	// Videos
+
+	@RequestMapping(value = "getVideos.do", method = RequestMethod.GET)
+	public String getVideosByDate(@RequestParam(value = "tripId") int tripId,
+			Model model) {
+		String imageUrl;
+		try {
+			ArrayList<VideoFileDto> videoFileDtos = galleriesService
+					.getVideosByDate(tripId);
+			TripDto tripDto = tripService.getTrip(tripId);
+
+			String imageBase64 = null;
+
+			for (VideoFileDto videoFileDto : videoFileDtos) {
+				imageUrl = imagePath.getTripvideopath()
+						+ videoFileDto.getVideothumbnailname();
+				imageBase64 = this.getImageEncodedString(imageUrl);
+				videoFileDto.setTbimginbase64(imageBase64);
+				videoFileDto.setNoOfComments(galleriesService
+						.getNoOfCommentsperVideo(videoFileDto.getVideoId()));
+			}
+			if (tripDto.getImagePath() != null) {
+				imageBase64 = this
+						.getImageEncodedString(imagePath.getTripimagepathperuser()+tripDto.getImagePath());
+			}
+			model.addAttribute("image", imageBase64);
+			model.addAttribute("videos", videoFileDtos);
+			model.addAttribute("trip", tripDto);
+
+			return "trip/videos";
+		} catch (Exception e) {
+			e.printStackTrace();
+			logger.info(e.getMessage() + " " + e);
+			return "error";
+		}
+
+	}
+
+	@RequestMapping(value = "addvideo.do", method = RequestMethod.GET)
+	public String addVideo(@RequestParam(value = "tripId") int tripId,
+			Model model) {
+		try {
+			TripDto tripDto = tripService.getTrip(tripId);
+
+			if (tripDto.getImagePath() != null) {
+				tripDto.setImagebase64(
+						getImageEncodedString(imagePath.getTripimagepathperuser()+tripDto.getImagePath()));
+			}
+		uploadVideoForm form=new uploadVideoForm();
+		form.setTripId(tripDto.getTripId());
+			model.addAttribute("trip", tripDto);
+			model.addAttribute("videoForm",form);
+
+			return "trip/addVideo";
+		} catch (Exception e) {
+			e.printStackTrace();
+			logger.info(e.getMessage() + " " + e.getCause());
+			return "error";
+		}
+	}
+
+	@RequestMapping(value = "addVideo.do", method = RequestMethod.POST)
+	public String addVideo(@ModelAttribute("videoForm")uploadVideoForm videoForm,BindingResult result, HttpServletRequest request,
+			HttpServletResponse response ) {
+		String filename = null;
+		String path = null;
+		boolean fileformat=false;
+		try {
+			if(videoForm.getVideo()==null){
+				
+				result.addError(new FieldError("videoForm", "video", "File Not Uploaded"));
+				return "trip/addVideo";
+			}else{
+				MultipartFile file=videoForm.getVideo();
+				 long MEGABYTE = 1024L * 1024L;
+				long filesizeinMB=file.getSize()/MEGABYTE;
+				
+				if(filesizeinMB>5){
+					result.addError(new FieldError("videoForm", "video", "File Size is greater than 5MB"));
+					return "trip/addVideo";
+				}
+				String name=file.getOriginalFilename();
+				name=name.substring(name.lastIndexOf(".")+1, name.length());
+				if(name.equalsIgnoreCase("mp4") || name.equalsIgnoreCase("mpeg")||name.equalsIgnoreCase("avi")||name.equalsIgnoreCase("mpg") || name.equalsIgnoreCase("wmv")||  name.equalsIgnoreCase("flv") || name.equalsIgnoreCase("mov")){
+					fileformat=true;
+				}
+				
+				//mp4 mpeg avi mpg wmv flv mov
+				if(!fileformat){
+					result.addError(new FieldError("videoForm", "video", " mp4 mpeg avi mpg wmv flv mov Formats are supported !"));
+					return "trip/addVideo";
+				}
+				
+			}
+			
+			
+			MultipartFile multipartFile = videoForm.getVideo();
+		
+			if (multipartFile != null) {
+				filename = multipartFile.getOriginalFilename();
+				int maxId = galleriesService.getMaxIdInVideo() + 1;
+				filename = filename.substring(0, filename.lastIndexOf("."))
+						+ "_"
+						+ maxId
+						+ filename.substring(filename.lastIndexOf("."),
+								filename.length());
+				path = imagePath.getTripvideopath() + filename;
+				File file = new File(path);
+				multipartFile.transferTo(file);
+				String videoflvpath = path;
+				
+				String isFlv=multipartFile.getOriginalFilename().substring(multipartFile.getOriginalFilename().lastIndexOf("."), multipartFile.getOriginalFilename().length());
+				if(!isFlv.contains("flv")){
+				// conv video to flv
+				ConvertAnyVideoToFlv converter = new ConvertAnyVideoToFlv();
+				videoflvpath=path.substring(0,
+						path.lastIndexOf(".") ) + ".flv";
+				converter.convertvideo(imagePath.getVideoconvpath(), path,
+						videoflvpath);
+				}
+				String videofilename = filename.substring(0,
+						filename.lastIndexOf(".") )
+						+ ".flv";
+
+				// Generate thumbnails for video
+				GenerateThumbnailFromVideo generateThumbnailFromVideo = new GenerateThumbnailFromVideo();
+				String tbpngpath = path.substring(0, path.lastIndexOf(".") )
+						+ ".png";
+				
+				generateThumbnailFromVideo.GenerateThumbnail(
+						imagePath.getVideoconvpath(), videoflvpath, tbpngpath);
+				
+				String tbfilename = filename.substring(0,
+						filename.lastIndexOf(".") )
+						+ ".png";
+
+				galleriesService.addVideo(videoForm.getTripId(),
+						videofilename, videoForm.getDescription(),
+						tbfilename);
+
+				// delete the non format file
+				if(!isFlv.contains("flv")){	file.delete();}
+
+			}
+
+			response.sendRedirect("/tripcaddie/trip/getVideos.do?tripId="
+					+ request.getParameter("tripId"));
+		} catch (Exception e) {
+			e.printStackTrace();
+			logger.info(e.getMessage() + " " + e.getCause());
+			try {
+				response.sendRedirect("/error.do");
+			} catch (IOException e1) {
+				e1.printStackTrace();
+				logger.info(e.getMessage() + " " + e.getCause());
+			}
+		}
+		return null;
+
+	}
+	
+	
+	@RequestMapping(value = "getVideo.do", method = RequestMethod.GET)
+	public String getVideo(@RequestParam(value = "tripId") int tripId,
+			@RequestParam(value = "videoId") int videoId, Model model) {
+		String videoUrl;
+		System.out.println("In gallery controller");
+		try {
+			TripDto tripDto = tripService.getTrip(tripId);
+			VideoFileDto videoFileDto = galleriesService.getVideo(videoId, tripId);
+			String imageBase64 = null;
+
+			videoUrl = imagePath.getTripvideopath()
+					+ videoFileDto.getVideoName();
+			
+			videoFileDto.setVideoUrl(videoUrl);
+			videoFileDto.setNoOfComments(galleriesService
+					.getNoOfCommentsperVideo(videoId));
+
+			if (tripDto.getImagePath() != null) {
+				imageBase64 = this
+						.getImageEncodedString(imagePath.getTripimagepathperuser()+tripDto.getImagePath());
+			}
+
+			System.out.println("--------Getting video comments--------");
+			// video comments
+			ArrayList<VideoCommentDto> videoCommentDtos = galleriesService
+					.getVideoComments(videoId);
+			for (VideoCommentDto videoCommentDto : videoCommentDtos) {
+				if (videoCommentDto.getTripMemberDto().getTripCaddieUserDto()
+						.getImageUrl() != null
+						&& !videoCommentDto.getTripMemberDto()
+								.getTripCaddieUserDto().getImageUrl().isEmpty())
+					videoCommentDto
+							.getTripMemberDto()
+							.getTripCaddieUserDto()
+							.setImageBase64(
+									getImageEncodedString(imagePath
+											.getTripimagepathperuser()
+											+ videoCommentDto
+													.getTripMemberDto()
+													.getTripCaddieUserDto()
+													.getImageUrl()));
+			}
+			model.addAttribute("image", imageBase64);
+			model.addAttribute("video", videoFileDto);
+			model.addAttribute("trip", tripDto);
+			model.addAttribute("videoComment", videoCommentDtos);
+
+			return "trip/playVideo";
+		} catch (Exception e) {
+			e.printStackTrace();
+			logger.info(e.getMessage() + " " + e);
+			return "error";
+		}
+	}
+
+	
+	//add comment for video
+
+	@RequestMapping(value="addVideoComment.do",method=RequestMethod.POST)
+	public @ResponseBody String addCommentforVideo(@RequestParam("videoid") int videoid ,@RequestParam("comment") String comment){
+		try {
+			galleriesService.addCommentforVideo(videoid, comment);
+			return "success";
+		} catch (Exception e) {
+			e.printStackTrace();
+			logger.info(e.getMessage()+" "+e.getCause());
+			return "error";
+		}
+	}
+	
+	
+	@RequestMapping(value="deleteVideoComment.do",method=RequestMethod.POST)
+	public @ResponseBody
+	String deleteCommentforVideo(@RequestParam(value="commentId") int commentID) {
+		try {
+			
+			galleriesService.deleteCommentforVideo(commentID);
+			return "success";
+			
+		} catch (Exception e) {
+			e.printStackTrace();
+			logger.info(e.getMessage()+" "+e.getCause());
+			return "error";
+		}
+	}
+	
+	@RequestMapping(value="editVideoComment.do",method=RequestMethod.POST)
+	public @ResponseBody
+	String editCommentforVideo(@RequestParam(value="commentId") int commentID,
+			@RequestParam(value="comment") String comment) {
+		try {
+			galleriesService.editCommentforVideo(commentID, comment);
+			//galleriesService.deleteComment(commentID);
+			return "success";
+			
+		} catch (Exception e) {
+			e.printStackTrace();
+			logger.info(e.getMessage()+" "+e.getCause());
+			return "error";
+		}
+	}
+
+	@RequestMapping(value="AddFavVideo.do",method=RequestMethod.POST)
+	public @ResponseBody
+	String AddVideotoFav(@RequestParam(value="videoId") int videoId	,@RequestParam("tripId") int tripId) {
+		try {
+			VideoFile videoFile=galleriesService.getVideoFile(videoId, tripId);
+			TripMember member=videoFile.getTripMember();
+			List<TripMember> members=new ArrayList<TripMember>(videoFile.getFavouriteVideo());
+			members.add(member);
+			videoFile.setFavouriteVideo(members);
+			//update entity
+			galleriesService.updateEntity(videoFile);
+			//galleriesService.deleteComment(commentID);
+			return "success";
+			
+		} catch (Exception e) {
+			e.printStackTrace();
+			logger.info(e.getMessage()+" "+e.getCause());
+			return "error";
+		}
+	}
+	
+	@RequestMapping(value="RemoveFavVideo.do",method=RequestMethod.POST)
+	public @ResponseBody
+	String RemoveVideoFromFav(@RequestParam(value="videoId") int videoId	,@RequestParam("tripId") int tripId) {
+		try {
+			VideoFile videoFile=galleriesService.getVideoFile(videoId, tripId);
+			TripMember member=videoFile.getTripMember();
+			List<TripMember> members=new ArrayList<TripMember>(videoFile.getFavouriteVideo());
+			members.remove(member);
+			videoFile.setFavouriteVideo(members);
+			//update entity
+			galleriesService.updateEntity(videoFile);
+			//galleriesService.deleteComment(commentID);
+			return "success";
+			
+		} catch (Exception e) {
+			e.printStackTrace();
+			logger.info(e.getMessage()+" "+e.getCause());
+			return "error";
+		}
+	}
+
+	
+	@RequestMapping(value = "addVideoRating.do", method = RequestMethod.POST)
+	public @ResponseBody String ratingVideo(@RequestParam(value = "tripId") int tripId,@RequestParam(value = "rating") int rating,
+			@RequestParam(value = "videoId") int videoId, Model model) {
+		try {
+			galleriesService.updateorAddVideoRating(tripId, videoId, rating);
+		} catch (Exception e) {
+			logger.error(e);
+		}
+		return null;
+	}
+
+	/**
+	 * 
+	 * sorting order for videos
+	 */
+	
+	@RequestMapping(value = "videosbysortorder.do", method = RequestMethod.GET)
+	public String videosbysortorder(@RequestParam(value = "tripId") int tripId,@RequestParam(value="sortorder") String sortorder,
+			Model model) {
+		String imageUrl;
+		try {
+			ArrayList<VideoFileDto> videoFileDtos =null;
+			if(sortorder.equalsIgnoreCase("date")){
+				 videoFileDtos = galleriesService
+							.getVideosByDate(tripId);
+				}
+				else if(sortorder.equalsIgnoreCase("rating")){
+					 videoFileDtos = galleriesService
+								.getVideosByRating(tripId);
+				}
+				else if(sortorder.equalsIgnoreCase("favourites")){
+					 videoFileDtos = galleriesService
+								.getVideosByFav(tripId);
+				}
+			
+			TripDto tripDto = tripService.getTrip(tripId);
+
+			String imageBase64 = null;
+
+			for (VideoFileDto videoFileDto : videoFileDtos) {
+				imageUrl = imagePath.getTripvideopath()
+						+ videoFileDto.getVideothumbnailname();
+				imageBase64 = this.getImageEncodedString(imageUrl);
+				videoFileDto.setTbimginbase64(imageBase64);
+				videoFileDto.setNoOfComments(galleriesService
+						.getNoOfCommentsperVideo(videoFileDto.getVideoId()));
+			}
+			if (tripDto.getImagePath() != null) {
+				imageBase64 = this
+						.getImageEncodedString(imagePath.getTripimagepathperuser()+tripDto.getImagePath());
+			}
+			model.addAttribute("image", imageBase64);
+			model.addAttribute("videos", videoFileDtos);
+			model.addAttribute("trip", tripDto);
+
+			return "trip/videos";
+		} catch (Exception e) {
+			e.printStackTrace();
+			logger.info(e.getMessage() + " " + e);
+			return "error";
+		}
+
+	}
+	
+	
+	
+	@RequestMapping(value = "allVideos.do", method = RequestMethod.GET)
+	public String allVideos(Model model) {
+		try {
+
+			List<TripDto> trips = tripService.getTripsOfUser();
+            System.out.println("trips size"+trips.size());
+			
+
+			for (TripDto trip : trips) {
+				trip.setGalleriespresent(false);
+				// get Imageasbase64
+				if (trip.getImagePath() != null) {
+
+					trip.setImagebase64(getImageEncodedString(imagePath.getTripimagepathperuser()+trip
+							.getImagePath()));
+				}
+				List<VideoFileDto> videos = new ArrayList<VideoFileDto>();
+				List<VideoFileDto> vList = galleriesService
+						.getVideosByDate(trip.getTripId());
+
+				for (VideoFileDto videoFileDto : vList) {
+					 String imageUrl = imagePath.getTripvideopath()
+								+ videoFileDto.getVideothumbnailname();
+					videoFileDto
+								.setTbimginbase64(getImageEncodedString(imageUrl));
+					videoFileDto
+								.setNoOfComments(galleriesService
+										.getNoOfCommentsperVideo(videoFileDto.getVideoId()));
+						
+					videos.add(videoFileDto);
+				}
+				if(videos!=null && !videos.isEmpty()){
+				trip.setGalleriespresent(true);
+				trip.setVideos(videos);
+				}
+
+			}
+
+			
+			model.addAttribute("trips", trips);
+
+			return "allvideos";
+		} catch (Exception e) {
+			e.printStackTrace();
+			logger.info(e.getMessage() + " " + e);
+			return "error";
+		}
+
+	}
+	
+	
+	@RequestMapping(value = "AllvideosbySort.do", method = RequestMethod.GET)
+	public String Allvideosbysortorder(@RequestParam(value="sortorder") String sortorder,
+			Model model) {
+		try {
+		List<TripDto> trips = tripService.getTripsOfUser();
+        System.out.println("trips size"+trips.size());
+		
+
+		for (TripDto trip : trips) {
+			trip.setGalleriespresent(false);
+			// get Imageasbase64
+			if (trip.getImagePath() != null) {
+
+				trip.setImagebase64(getImageEncodedString(imagePath.getTripimagepathperuser()+trip
+						.getImagePath()));
+			}
+			List<VideoFileDto> videos = new ArrayList<VideoFileDto>();
+			ArrayList<VideoFileDto> vList =null;
+			if(sortorder.equalsIgnoreCase("date")){
+				vList = galleriesService
+							.getVideosByDate(trip.getTripId());
+				}
+				else if(sortorder.equalsIgnoreCase("rating")){
+					vList = galleriesService
+								.getVideosByRating(trip.getTripId());
+				}
+				else if(sortorder.equalsIgnoreCase("favourites")){
+					vList = galleriesService
+								.getVideosByFav(trip.getTripId());
+				}
+			
+
+			for (VideoFileDto videoFileDto : vList) {
+					String imageUrl = imagePath.getTripvideopath()
+							+ videoFileDto.getVideothumbnailname();
+				videoFileDto
+							.setTbimginbase64(getImageEncodedString(imageUrl));
+				videoFileDto
+							.setNoOfComments(galleriesService
+									.getNoOfCommentsperVideo(videoFileDto.getVideoId()));
+					
+				videos.add(videoFileDto);
+			}
+			if(videos!=null && !videos.isEmpty()){
+			trip.setGalleriespresent(true);
+			trip.setVideos(videos);
+			}
+
+		}
+
+		
+		model.addAttribute("trips", trips);
+
+		return "allvideos";
+	} catch (Exception e) {
+			e.printStackTrace();
+			logger.info(e.getMessage() + " " + e);
+			return "error";
+		}
+
+	}
+	
+	
+}

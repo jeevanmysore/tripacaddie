@@ -1,0 +1,162 @@
+<%@ page language="java" contentType="text/html; charset=ISO-8859-1"
+    pageEncoding="ISO-8859-1"%>
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>Awards | TripCaddie</title>
+
+<link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.7.2/themes/cupertino/jquery-ui.css" type="text/css" />
+<script src="http://code.jquery.com/jquery-1.8.2.js"></script>
+<script src="http://code.jquery.com/ui/1.9.0/jquery-ui.js"></script>
+<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
+<script type="text/javascript"
+	src="http://ajax.googleapis.com/ajax/libs/jquery/1/jquery.min.js"></script>
+<script type="text/javascript"
+	src="http://ajax.googleapis.com/ajax/libs/jqueryui/1/jquery-ui.min.js"></script>
+<style type="text/css">
+		.form-required{
+			color: red;
+		}
+		.ui-state-error{
+		background-color: lime;
+		}
+	</style>
+<script type="text/javascript">
+
+
+
+$(function(){
+	$('#EndPolldate').datepicker({
+		autoSize:true,
+		hideIfNoPrevNext:true,
+		minDate:1,
+		maxDate:16
+	});
+});
+
+
+	var tripId;
+	var awardid;
+	
+	
+	
+	function addComment(awardid){
+		if($('#textarea').val().length!=0 ){
+			var x=new Date();
+			
+		$.post("/tripcaddie/trip/addAwardComment.do",{	
+			awardid : awardid,
+			comment : $('#textarea').val(),
+			date: x.getTime()
+		},function(data){
+			if(data=="success"){
+				window.location.href="/tripcaddie/trip/displayAward.do?tripId="+tripId+'&awardId='+awardid;
+			}else{
+				window.location.href="/tripcaddie/error.do";
+			}
+		});
+		}
+	}
+	
+	
+	function editComment(commentID){
+		$('#editComment').hide();
+		$('#addcomment').hide();
+		$('#editComment').show();
+		$('#comment'+commentID).hide();
+		$('#commentEdit').val($('#commentspan'+commentID).text());
+		commentId=commentID;
+		}
+	
+	function deleteComment(commentID){
+		$.post("/tripcaddie/trip/deleteAwardComment.do",{
+			commentId : commentID
+		},function(data){
+			if(data=="success"){
+				$('#comment'+commentID).remove();
+			}else{
+				alert('error');
+			}
+		});
+	}
+	
+	function cancelEdit(){
+		
+		$('#comment'+commentId).show();
+		
+		$('#addcomment').show();
+		$('#editComment').hide();
+		
+		$('#commentEdit').val(""); 
+		 commentId=""; 
+	}
+	
+	function updateComment(awardid){
+		
+		$.post("/tripcaddie/trip/editAwardComment.do",{
+			commentId : commentId,
+			comment : $('#commentEdit').val()
+		},function(data){
+			if(data=="success"){
+				window.location.href="/tripcaddie/trip/displayAward.do?tripId="+tripId+'&awardId='+awardid;
+			}else{
+				
+			}
+		});
+	}
+	function back(){
+		window.location.href="/tripcaddie/trip/getAwardsWon.do?tripId="+tripId;
+	}
+	
+	
+</script>
+</head>
+<body>
+	<%@ include file="/pages/header2.jsp" %>
+	<h3>Awards</h3> <input type="button" value="Back" onclick="back();" />
+<script type="text/javascript">
+		tripId=${trip.tripId};
+	</script>
+	<div id="awardsWon">
+	<p><img alt='Embedded Image' width='180px' height='150px' src=data:image/png;base64,${awards.awardImgbas64} /></p>
+	<p>${awards.awardname }</p>
+	<p>Winner :${awards.nominee.tripCaddieUserDto.firstName} ${awards.nominee.tripCaddieUserDto.lastName}</p>
+	Awarded :<fmt:formatDate value="${awards.pollenddate }" type="date" dateStyle="long" />
+	<!-- Comments -->
+		<div id="comment">
+		<h5>Comments:</h5>
+		<c:forEach items="${awardComment}" var="awardComment">
+		<div id="comment${awardComment.awardCommentId}">
+			<p><img alt="Embedded Image" width='100px' height='70px' src=data:image/png;base64,${awardComment.tripMemberDto.tripCaddieUserDto.imageBase64} /></p>
+			<p><c:out value="${awardComment.tripMemberDto.tripCaddieUserDto.firstName }"/> <c:out value="${awardComment.tripMemberDto.tripCaddieUserDto.lastName }"/> 
+			<div id="commentspan${awardComment.awardCommentId}">
+			<c:out value="${awardComment.comments }"/> 
+			</div>
+			</p>
+			<p><fmt:formatDate value="${awardComment.lastUpdatedDate.time }" type="both" dateStyle="long" timeStyle="medium"/>&nbsp;<a href="#" onclick="editComment(${awardComment.awardCommentId});">Edit</a>|<a href="#" onclick="deleteComment(${awardComment.awardCommentId})">Delete</a> </p>
+			</div>
+		</c:forEach>
+		</div>
+		<br/><br/>
+		<div id="editComment" style="display: none;">
+		<textarea id="commentEdit" rows="4" cols="50" ></textarea>
+		<input type="button" value="update"  onclick="updateComment(${awards.awardid});" >
+		<input type="button" value="cancel"  onclick="cancelEdit();" >
+		</div>
+		<p><br/></p>
+		<p><br/></p>
+	<div id="addcomment">
+		<h5>Add Comment:</h5>
+		<textarea id="textarea" rows="4" cols="50"></textarea>
+		
+		<input type="button" value="Comment"  onclick="addComment(${awards.awardid});" >
+		<p><br/></p>
+		</div>
+	</div>
+
+</body> 
+</html>

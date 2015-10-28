@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:mvc="http://www.springframework.org/schema/mvc"
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:sec="http://www.springframework.org/schema/security"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans 
+	   		http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+	   		http://www.springframework.org/schema/context
+	   		http://www.springframework.org/schema/context/spring-context-3.0.xsd
+	   		http://www.springframework.org/schema/tx 
+			http://www.springframework.org/schema/tx/spring-tx-3.0.xsd
+			http://www.springframework.org/schema/mvc 
+			http://www.springframework.org/schema/mvc/spring-mvc-3.0.xsd
+			http://www.springframework.org/schema/security
+			http://www.springframework.org/schema/security/spring-security-3.0.xsd">
+			
+	<context:annotation-config/>
+	<context:component-scan base-package="com.tripcaddie"/>
+	<mvc:annotation-driven/>
+	<import resource="spring-scheduler.xml" />
+	
+	<!-- Email sender -->
+	<bean id="mailSender" class ="org.springframework.mail.javamail.JavaMailSenderImpl" >
+		<property name="host" value="smtp.gmail.com" />
+		<property name="port" value="25" />
+		<property name="username" value="knstech01@gmail.com" />
+		<property name="password" value="sandbox-2012" />
+		<property name="javaMailProperties">
+		<props>
+			<prop key="mail.smtp.auth">true</prop>
+			<prop key="mail.smtp.starttls.enable">true</prop>
+		</props>
+		</property>
+	</bean>
+	<bean id="velocityEngine" class="org.springframework.ui.velocity.VelocityEngineFactoryBean">
+		<property name="velocityProperties">
+			<value>
+				resource.loader=class
+				class.resource.loader.class=org.apache.velocity.runtime.resource.loader.ClasspathResourceLoader
+			</value>
+		</property>
+	</bean>
+	
+	<!-- json view -->
+	<bean id="jsonView" class="net.sf.json.spring.web.servlet.view.JsonView" />
+
+	<!-- Database -->
+	<bean id="dataSource" class="org.apache.commons.dbcp.BasicDataSource">
+		<property name="driverClassName" value="com.mysql.jdbc.Driver" />
+		<property name="url" value="jdbc:mysql://localhost:3360/tripcaddie2" />
+		<property name="username" value="root"/>
+		<property name="password" value="root"/>
+		<!-- <property name="url" value="jdbc:mysql://localhost:3306/client_tripcaddie"></property>
+		<property name="username" value="root"/>
+		<property name="password" value='knsr00t'/> -->
+		<!-- <property name="maxActive" value="1" /> -->
+	</bean>
+	
+	<!-- Configure the multipart resolver -->
+    <bean id="multipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver">      
+    </bean>
+	
+	<!-- Hibernate -->
+	<bean id="sessionFactory" class="org.springframework.orm.hibernate3.annotation.AnnotationSessionFactoryBean">
+		<property name="dataSource" ref="dataSource"/>
+		<property name="hibernateProperties">
+			<props>
+				<prop key="hibernate.dialect">org.hibernate.dialect.MySQLDialect</prop>
+				<prop key="hibernate.show_sql">false</prop>
+				<prop key="hibernate.hbm2ddl.auto">update</prop>
+			</props>
+		</property>	
+		<property name="packagesToScan" value="com.tripcaddie" />
+	</bean>
+	
+	<bean id="transactionManager" class="org.springframework.orm.hibernate3.HibernateTransactionManager">
+		<property name="sessionFactory" ref="sessionFactory" />
+	</bean>
+	<tx:annotation-driven transaction-manager="transactionManager"/>
+	
+	<bean id="hibernateTemplate" class="org.springframework.orm.hibernate3.HibernateTemplate">
+		<property name="sessionFactory" ref="sessionFactory" />
+	</bean>
+	
+	<!-- Spring Security check -->
+	<sec:global-method-security secured-annotations="enabled" />
+	
+	<!-- <bean id="customAuthenticationHandler" class="com.tripcaddie.common.securityService.CustomAuthenticationHandler" /> -->
+	
+	<sec:http auto-config="true" use-expressions="true">
+		<sec:intercept-url pattern="/getAdvices.do"  access="permitAll"/>
+		<sec:intercept-url pattern="/getAdvice.do"  access="permitAll"/>
+		<sec:intercept-url pattern="/getClubDetails.do" access="permitAll"/>
+		<sec:intercept-url pattern="/getReviews.do" access="permitAll"/>
+		
+		<sec:intercept-url pattern="/**/*.do" access="hasRole('ROLE_USER')"/>
+		<sec:access-denied-handler error-page="/registration.do"/>
+		<sec:intercept-url pattern="/registration.do" filters="none"/>
+		<sec:intercept-url pattern="/registerUser.do" filters="none"/>
+		<sec:intercept-url pattern="/userExistance.do" filters="none"/>
+		<sec:intercept-url pattern="/emailExistance.do" filters="none"/>
+		<sec:intercept-url pattern="/forgetPassword.do" filters="none"/>
+		<sec:intercept-url pattern="/getDestinations.do" filters="none"/>
+		
+		
+		<!-- <sec:intercept-url pattern="/getReviews.do" filters="none"/> -->
+		<sec:intercept-url pattern="/reCaptchaValidation.do" filters="none"/>
+		<sec:intercept-url pattern="/confirmation.do" filters="none"/>
+		<sec:intercept-url pattern="/resetPassword.do" filters="none"/>
+		<sec:intercept-url pattern="/updatePassword.do" filters="none"/>
+		<sec:intercept-url pattern="/error.do" filters="none"/>
+		<sec:intercept-url pattern="/tellAFriend.do" filters="none"/>
+		<sec:intercept-url pattern="/logout.do" filters="none"/>
+		<sec:intercept-url pattern="/footer/*" filters="none"/>
+		
+		<sec:form-login login-page="/" default-target-url="/userHome.do" authentication-failure-url="/tripcaddieHome.jsp?error=true" always-use-default-target="false" />
+		
+        <sec:logout logout-success-url="/logout.do" />
+	</sec:http>
+	
+	
+	<bean id="daoAuthenticationProvider"
+ 		class="org.springframework.security.authentication.dao.DaoAuthenticationProvider">
+  		<property name="userDetailsService" ref="userDetailsService"/>
+	</bean>
+	
+	<bean id="authenticationManager"
+   	 	class="org.springframework.security.authentication.ProviderManager">
+  		<property name="providers">
+    		<list>
+      			<ref local="daoAuthenticationProvider" />
+    		</list>
+  		</property>
+	</bean>
+	<!-- Beans -->
+	<bean id="userDetailsService" class="com.tripcaddie.common.securityService.UserDetailsServiceImpl" />
+    
+    <sec:authentication-manager>
+  		<sec:authentication-provider user-service-ref="userDetailsService">
+    		<!-- <password-encoder hash="md5"/> -->
+  		</sec:authentication-provider>
+	</sec:authentication-manager>
+	<!-- Spring Security check -->
+	
+	<!-- Image path -->
+	<bean id="imagePath" class="com.tripcaddie.common.image.ImagePath">
+		<property name="userimagepath" value="F:/images/"></property>
+		<property name="tripimagepathperuser" value="F:/images/user/"></property>
+		<property name="tripimagepath" value="f:/images/trip/photos/"></property>
+		<property name="tripvideopath" value="F:/images/trip/videos/"></property>
+		<property name="tripAwardpath" value="F:/images/trip/awards/"></property>
+		<property name="videoconvpath" value="F:/video/mpeg/ffmpeg.exe/"></property>
+		<!-- <property name="userimagepath" value="/var/www/tripcaddie/"></property>
+		<property name="tripimagepathperuser" value="/var/www/tripcaddie/user/"></property>
+		<property name="tripimagepath" value="/var/www/tripcaddie/trip/photos/"></property>
+		<property name="tripvideopath" value="/var/www/tripcaddie/trip/videos/"></property>
+		<property name="tripAwardpath" value="/var/www/tripcaddie/trip/awards/"></property>
+		<property name="videoconvpath" value="/var/www/tripcaddie/videoconv/ffmpeg"></property> -->
+    </bean>
+	
+</beans>

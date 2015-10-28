@@ -1,0 +1,62 @@
+/* PartnerBar Specific Styles */
+.pb-root {
+  clear : both;
+  margin : 0;
+  padding: 0;
+}
+
+/**
+ * For Users of Semantic Markup, note our generic
+ * re-styling of the ul/li elements
+ */
+.pb-root ul,
+.pb-root li {
+  list-style-image : none;
+  list-style-position : outside;
+  list-style-type : none;
+  margin : 0;
+  padding : 0;
+}
+
+.pb-partner-cell {
+  float : left;
+  font-size : 0.9em;
+  margin-left : 20px;
+  width : 135px;
+}
+
+.pb-noResults {
+  display : none;
+}
+
+.pb-partner-logo a img {
+  border : none;
+}
+
+div.pb-entry {
+  margin-bottom : 10px;
+}
+li.pb-entry {
+  margin-bottom : 10px;
+}
+
+div.pb-title {
+  line-height : 1.3em;
+  height : 2.6em;
+  overflow : hidden;
+}
+
+.pb-partner-moreLink {
+  font-weight : normal;
+}
+
+h3.pb-footer,
+div.pb-footer {
+  clear : both;
+  text-align : right;
+  font-size : 90%;
+  font-weight : normal;
+  padding : 0px 4px 4px 0px;
+}
+
+
